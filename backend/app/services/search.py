@@ -1,39 +1,15 @@
-import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.models import Book
 from app.services.vector_store import semantic_search
 
-logger = logging.getLogger(__name__)
-
-SYNONYMS = {
-    "ai": "artificial intelligence",
-    "ml": "machine learning",
-    "py": "python",
-    "dsa": "data structures",
-    "scifi": "science fiction",
-    "sci-fi": "science fiction",
-    "pm": "project management",
-}
-
-STOPWORDS = {
-    "a", "an", "the", "me", "i", "want", "show", "find", "suggest",
-    "books", "book", "about", "for", "to", "learn", "learning",
-    "written", "by", "in", "of", "and", "or", "please", "need",
-    "available", "english", "short", "simple", "easy",
-    "beginner", "beginner-friendly", "beginners", "suitable",
-}
-
 
 @dataclass
 class SearchCriteria:
     original: str
-    terms: list[str] = field(default_factory=list)
     language: str | None = None
     available_only: bool = False
     year_from: int | None = None
@@ -43,7 +19,6 @@ class SearchCriteria:
     genre: str | None = None
     category: str | None = None
     author: str | None = None
-    similar_to: str | None = None
     scores: dict[int, float] = field(default_factory=dict)
     rag_context: list[str] = field(default_factory=list)
 
@@ -98,17 +73,6 @@ def parse_query(q: str) -> SearchCriteria:
     if m:
         criteria.author = m.group(1).strip(" .")
 
-    m = re.search(r"similar to\s+(.+)$", text)
-    if m:
-        criteria.similar_to = m.group(1).strip(" .")
-        criteria.genre = criteria.genre or "Fantasy"
-
-    cleaned = text
-    for src, dest in SYNONYMS.items():
-        cleaned = re.sub(rf"\b{re.escape(src)}\b", dest, cleaned)
-
-    tokens = re.findall(r"[a-z0-9]+", cleaned)
-    criteria.terms = [t for t in tokens if t not in STOPWORDS and len(t) > 1]
     return criteria
 
 
@@ -175,14 +139,9 @@ def search_books(
     available_only = extra.get("available_only") or criteria.available_only
 
     books: list[Book] = []
-    exact = True
+    exact = not (q and q.strip())
 
     if q and q.strip():
-        # Build semantic search query with any detected semantic expansion
-        semantic_query = q.strip()
-        if criteria.similar_to:
-            semantic_query = f"{semantic_query} magic fantasy adventure similar to {criteria.similar_to}"
-
         vector_filters = {}
         if language:
             vector_filters["language"] = language
@@ -194,25 +153,24 @@ def search_books(
             vector_filters["year_to"] = year_to
         if pages_max is not None:
             vector_filters["pages_max"] = pages_max
-        if reading_level:
+        # Reading level inferred from natural language should guide semantic ranking,
+        # not exclude books whose indexed metadata uses a different level label.
+        if extra.get("reading_level"):
             vector_filters["reading_level"] = reading_level
 
-        # Query Qdrant Vector Database
-        try:
-            vector_results = semantic_search(
-                query_text=semantic_query,
-                limit=50,
-                filters=vector_filters,
-            )
-        except Exception as e:
-            logger.error(f"Error querying Qdrant vector store: {e}")
-            vector_results = []
+        vector_results = semantic_search(
+            query_text=q.strip(),
+            limit=50,
+            filters=vector_filters,
+        )
 
         if vector_results:
             top_score = vector_results[0][1]
-            # Dynamic cutoff to retain relevant semantic matches and exclude irrelevant tail
             cutoff = max(0.50, top_score * 0.83) if top_score >= 0.50 else 0.40
-            relevant_results = [r for r in vector_results if r[1] >= cutoff]
+            relevant_results = [result for result in vector_results if result[1] >= cutoff]
+            showing_related = not relevant_results
+            if showing_related:
+                relevant_results = vector_results
 
             book_scores: dict[int, float] = {}
             ordered_ids: list[int] = []
@@ -247,27 +205,8 @@ def search_books(
                     filtered_books.append(b)
 
             books = filtered_books
-            exact = top_score >= 0.52
+            exact = not showing_related and top_score >= 0.52
 
-        # Fallback to database query if vector search returned nothing
-        if not books:
-            logger.info("Semantic vector search returned 0 results, falling back to database query")
-            fallback_query = apply_db_filters(db.query(Book), criteria, extra)
-            if criteria.terms:
-                like_clauses = [
-                    or_(
-                        Book.title.ilike(f"%{term}%"),
-                        Book.description.ilike(f"%{term}%"),
-                        Book.summary.ilike(f"%{term}%"),
-                        Book.keywords.ilike(f"%{term}%"),
-                        Book.genre.ilike(f"%{term}%"),
-                        Book.category.ilike(f"%{term}%"),
-                    )
-                    for term in criteria.terms
-                ]
-                fallback_query = fallback_query.filter(or_(*like_clauses))
-            books = fallback_query.all()
-            exact = False
     else:
         # No query string: standard catalog browsing with applied filters
         query = apply_db_filters(db.query(Book), criteria, extra)
