@@ -2,22 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
 
 export function SiteHeader() {
   const router = useRouter();
-  const [loggedIn, setLoggedIn] = useState(false);
+  const { user, ready, logout } = useAuth();
 
-  useEffect(() => {
-    setLoggedIn(!!localStorage.getItem("token"));
-  }, []);
-
-  function logout() {
-    localStorage.removeItem("token");
-    setLoggedIn(false);
+  function onLogout() {
+    logout();
     router.push("/");
-    router.refresh();
   }
 
   return (
@@ -29,7 +23,7 @@ export function SiteHeader() {
         <Button variant="ghost" nativeButton={false} render={<Link href="/" />}>
           Catalog
         </Button>
-        {loggedIn ? (
+        {!ready ? null : user ? (
           <>
             <Button
               variant="ghost"
@@ -38,7 +32,19 @@ export function SiteHeader() {
             >
               My rentals
             </Button>
-            <Button variant="outline" onClick={logout}>
+            {user.role === "admin" && (
+              <Button
+                variant="ghost"
+                nativeButton={false}
+                render={<Link href="/admin" />}
+              >
+                Admin
+              </Button>
+            )}
+            <span className="text-sm text-muted-foreground hidden sm:inline">
+              {user.full_name}
+            </span>
+            <Button variant="outline" onClick={onLogout}>
               Sign out
             </Button>
           </>

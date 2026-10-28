@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAuth } from "@/components/auth-provider";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -40,7 +42,7 @@ export default function RegisterPage() {
         phone: phone || null,
       });
       const { access_token } = await api.login({ email, password });
-      localStorage.setItem("token", access_token);
+      await login(access_token);
       router.push("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed");

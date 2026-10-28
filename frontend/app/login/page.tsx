@@ -6,9 +6,11 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Suspense } from "react";
+import { useAuth } from "@/components/auth-provider";
 
 function LoginForm() {
   const router = useRouter();
+  const { login } = useAuth();
   const next = useSearchParams().get("next") || "/dashboard";
   const [email, setEmail] = useState("reader@smartbook.local");
   const [password, setPassword] = useState("Reader123!");
@@ -18,7 +20,7 @@ function LoginForm() {
     e.preventDefault();
     try {
       const { access_token } = await api.login({ email, password });
-      localStorage.setItem("token", access_token);
+      await login(access_token);
       router.push(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");

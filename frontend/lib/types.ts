@@ -31,6 +31,7 @@ export type User = {
     items: Book[];
     total: number;
     page: number;
+    page_size: number;
     query: string | null;
     exact_match: boolean;
     message: string | null;

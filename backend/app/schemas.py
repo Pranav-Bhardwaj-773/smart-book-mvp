@@ -108,3 +108,37 @@ class DashboardOut(BaseModel):
     capacity_message: str
     current: list[RentalOut]
     history: list[RentalOut]
+
+class UserStatusUpdate(BaseModel):
+    status: str
+
+
+class InventoryUpdate(BaseModel):
+    delta: int
+
+
+class AdminRentalOut(RentalOut):
+    user_id: int
+    user_email: str
+    user_name: str
+
+
+class BookCreate(BaseModel):
+    isbn: str = Field(min_length=4, max_length=20)
+    title: str = Field(min_length=1, max_length=255)
+    subtitle: str | None = None
+    authors: str = Field(min_length=1, max_length=255)
+    description: str = ""
+    summary: str = ""
+    category: str = "General"
+    genre: str = "Non-fiction"
+    language: str = "English"
+    publisher: str = "Unknown"
+    publication_year: int = 2024
+    edition: str | None = "1st"
+    page_count: int = Field(default=100, ge=1)
+    keywords: str = ""
+    search_tags: str = ""
+    reading_level: str = "general"
+    cover_url: str | None = None
+    total_copies: int = Field(default=1, ge=1)

@@ -1,8 +1,9 @@
+import { getToken } from "./auth-store";
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 function token() {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  return getToken();
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -35,15 +36,56 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  me: () => request("/auth/me"),
-  books: (q: string, page = 1) =>
-    request<import("./types").BookList>(
-      `/books?q=${encodeURIComponent(q)}&page=${page}&page_size=12`
-    ),
+  me: () => request<import("./types").User>("/auth/me"),
+  books: (opts: {
+    q?: string;
+    page?: number;
+    sort?: string;
+    language?: string;
+    available_only?: boolean;
+  }) => {
+    const p = new URLSearchParams();
+    p.set("q", opts.q ?? "");
+    p.set("page", String(opts.page ?? 1));
+    p.set("page_size", "12");
+    p.set("sort", opts.sort ?? "relevance");
+    if (opts.language) p.set("language", opts.language);
+    if (opts.available_only) p.set("available_only", "true");
+    return request<import("./types").BookList>(`/books?${p.toString()}`);
+  },
   book: (id: number) => request<import("./types").Book>(`/books/${id}`),
   dashboard: () => request<import("./types").Dashboard>("/rentals/me"),
   rent: (book_id: number) =>
     request("/rentals", { method: "POST", body: JSON.stringify({ book_id }) }),
   returnBook: (id: number) =>
     request(`/rentals/${id}/return`, { method: "POST" }),
+  adminStats: () => request("/admin/stats"),
+adminUsers: (q = "") =>
+  request<import("./types").User[]>(
+    `/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`
+  ),
+adminSetStatus: (id: number, status: string) =>
+  request(`/admin/users/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  }),
+adminBooks: () => request<import("./types").Book[]>("/admin/books"),
+adminArchive: (id: number) =>
+  request(`/admin/books/${id}/archive`, { method: "POST" }),
+adminRestore: (id: number) =>
+  request(`/admin/books/${id}/restore`, { method: "POST" }),
+adminInventory: (id: number, delta: number) =>
+  request(`/admin/books/${id}/inventory`, {
+    method: "POST",
+    body: JSON.stringify({ delta }),
+  }),
+adminRentals: (status = "") =>
+  request(
+    `/admin/rentals${status ? `?status=${encodeURIComponent(status)}` : ""}`
+  ),
+adminReturn: (id: number) =>
+  request(`/admin/rentals/${id}/return`, { method: "POST" }),
+adminAddBook: (body: object) =>
+  request("/admin/books", { method: "POST", body: JSON.stringify(body) }),
 };
+
