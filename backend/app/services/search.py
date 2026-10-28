@@ -1,10 +1,15 @@
+import logging
 import re
 from dataclasses import dataclass, field
+from typing import Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.models import Book
+from app.services.vector_store import semantic_search
+
+logger = logging.getLogger(__name__)
 
 SYNONYMS = {
     "ai": "artificial intelligence",
@@ -20,7 +25,7 @@ STOPWORDS = {
     "a", "an", "the", "me", "i", "want", "show", "find", "suggest",
     "books", "book", "about", "for", "to", "learn", "learning",
     "written", "by", "in", "of", "and", "or", "please", "need",
-    "an", "available", "english", "short", "simple", "easy",
+    "available", "english", "short", "simple", "easy",
     "beginner", "beginner-friendly", "beginners", "suitable",
 }
 
@@ -39,6 +44,8 @@ class SearchCriteria:
     category: str | None = None
     author: str | None = None
     similar_to: str | None = None
+    scores: dict[int, float] = field(default_factory=dict)
+    rag_context: list[str] = field(default_factory=list)
 
 
 def parse_query(q: str) -> SearchCriteria:
@@ -105,7 +112,8 @@ def parse_query(q: str) -> SearchCriteria:
     return criteria
 
 
-def apply_filters(query: Query, c: SearchCriteria, extra: dict) -> Query:
+def apply_db_filters(query: Query, c: SearchCriteria, extra: dict) -> Query:
+    """Apply standard relational DB filters."""
     language = extra.get("language") or c.language
     year_from = extra.get("year_from") if extra.get("year_from") is not None else c.year_from
     year_to = extra.get("year_to") if extra.get("year_to") is not None else c.year_to
@@ -137,73 +145,7 @@ def apply_filters(query: Query, c: SearchCriteria, extra: dict) -> Query:
     if available_only:
         query = query.filter(Book.available_copies > 0)
 
-    if extra.get("q_like"):
-        like = f"%{extra['q_like']}%"
-        query = query.filter(
-            or_(
-                Book.title.ilike(like),
-                Book.subtitle.ilike(like),
-                Book.authors.ilike(like),
-                Book.description.ilike(like),
-                Book.summary.ilike(like),
-                Book.keywords.ilike(like),
-                Book.search_tags.ilike(like),
-                Book.genre.ilike(like),
-                Book.category.ilike(like),
-                Book.isbn.ilike(like),
-            )
-        )
-
-    terms = list(c.terms)
-    if c.similar_to:
-        terms.extend(["magic", "wizard", "fantasy", "hogwarts"])
-
-    for term in terms:
-        like = f"%{term}%"
-        query = query.filter(
-            or_(
-                Book.title.ilike(like),
-                Book.subtitle.ilike(like),
-                Book.authors.ilike(like),
-                Book.description.ilike(like),
-                Book.summary.ilike(like),
-                Book.keywords.ilike(like),
-                Book.search_tags.ilike(like),
-                Book.genre.ilike(like),
-                Book.category.ilike(like),
-            )
-        )
     return query
-
-
-def score_book(book: Book, c: SearchCriteria) -> int:
-    blob = " ".join(
-        [
-            book.title,
-            book.subtitle or "",
-            book.authors,
-            book.description,
-            book.summary,
-            book.keywords,
-            book.search_tags,
-            book.genre,
-            book.category,
-        ]
-    ).lower()
-    score = 0
-    for term in c.terms:
-        if term in blob:
-            score += 3
-        if term in (book.title or "").lower():
-            score += 5
-        if term in (book.authors or "").lower():
-            score += 4
-    if c.available_only or True:
-        if book.available_copies > 0:
-            score += 1
-    if c.reading_level and book.reading_level == c.reading_level:
-        score += 2
-    return score
 
 
 def search_books(
@@ -215,30 +157,124 @@ def search_books(
     page_size: int,
     extra: dict,
 ):
+    """
+    Semantic RAG search using Qdrant Vector Database.
+    Reads matching vectors using cosine similarity, enriches with database models,
+    and applies relevant filtering and sorting.
+    """
     criteria = parse_query(q or "")
-    query = apply_filters(db.query(Book), criteria, extra)
-    books = query.all()
 
-    if q and not books:
-        loose = db.query(Book).filter(Book.status != "archived")
-        if criteria.terms:
-            like = f"%{criteria.terms[0]}%"
-            loose = loose.filter(
-                or_(
-                    Book.title.ilike(like),
-                    Book.description.ilike(like),
-                    Book.keywords.ilike(like),
-                    Book.genre.ilike(like),
-                    Book.category.ilike(like),
-                )
+    language = extra.get("language") or criteria.language
+    year_from = extra.get("year_from") if extra.get("year_from") is not None else criteria.year_from
+    year_to = extra.get("year_to") if extra.get("year_to") is not None else criteria.year_to
+    pages_max = extra.get("pages_max") if extra.get("pages_max") is not None else criteria.pages_max
+    reading_level = extra.get("reading_level") or criteria.reading_level
+    genre = extra.get("genre") or criteria.genre
+    category = extra.get("category") or criteria.category
+    author = extra.get("author") or criteria.author
+    available_only = extra.get("available_only") or criteria.available_only
+
+    books: list[Book] = []
+    exact = True
+
+    if q and q.strip():
+        # Build semantic search query with any detected semantic expansion
+        semantic_query = q.strip()
+        if criteria.similar_to:
+            semantic_query = f"{semantic_query} magic fantasy adventure similar to {criteria.similar_to}"
+
+        vector_filters = {}
+        if language:
+            vector_filters["language"] = language
+        if available_only:
+            vector_filters["available_only"] = True
+        if year_from is not None:
+            vector_filters["year_from"] = year_from
+        if year_to is not None:
+            vector_filters["year_to"] = year_to
+        if pages_max is not None:
+            vector_filters["pages_max"] = pages_max
+        if reading_level:
+            vector_filters["reading_level"] = reading_level
+
+        # Query Qdrant Vector Database
+        try:
+            vector_results = semantic_search(
+                query_text=semantic_query,
+                limit=50,
+                filters=vector_filters,
             )
-        books = loose.all()
-        exact = False
+        except Exception as e:
+            logger.error(f"Error querying Qdrant vector store: {e}")
+            vector_results = []
+
+        if vector_results:
+            top_score = vector_results[0][1]
+            # Dynamic cutoff to retain relevant semantic matches and exclude irrelevant tail
+            cutoff = max(0.50, top_score * 0.83) if top_score >= 0.50 else 0.40
+            relevant_results = [r for r in vector_results if r[1] >= cutoff]
+
+            book_scores: dict[int, float] = {}
+            ordered_ids: list[int] = []
+            for b_id, score, payload in relevant_results:
+                book_scores[b_id] = score
+                ordered_ids.append(b_id)
+                summary_text = payload.get("summary") or payload.get("title") or ""
+                criteria.rag_context.append(f"[{payload.get('title')}]: {summary_text}")
+
+            criteria.scores = book_scores
+
+            # Fetch books from database
+            retrieved_books = (
+                db.query(Book)
+                .filter(Book.id.in_(ordered_ids), Book.status != "archived")
+                .all()
+            )
+            book_map = {b.id: b for b in retrieved_books}
+
+            # Preserve semantic relevance rank
+            filtered_books: list[Book] = []
+            for b_id in ordered_ids:
+                if b_id in book_map:
+                    b = book_map[b_id]
+                    # Post-filter if author, genre, or category was strictly specified
+                    if author and author.lower() not in (b.authors or "").lower():
+                        continue
+                    if genre and genre.lower() not in (b.genre or "").lower():
+                        continue
+                    if category and category.lower() not in (b.category or "").lower():
+                        continue
+                    filtered_books.append(b)
+
+            books = filtered_books
+            exact = top_score >= 0.52
+
+        # Fallback to database query if vector search returned nothing
+        if not books:
+            logger.info("Semantic vector search returned 0 results, falling back to database query")
+            fallback_query = apply_db_filters(db.query(Book), criteria, extra)
+            if criteria.terms:
+                like_clauses = [
+                    or_(
+                        Book.title.ilike(f"%{term}%"),
+                        Book.description.ilike(f"%{term}%"),
+                        Book.summary.ilike(f"%{term}%"),
+                        Book.keywords.ilike(f"%{term}%"),
+                        Book.genre.ilike(f"%{term}%"),
+                        Book.category.ilike(f"%{term}%"),
+                    )
+                    for term in criteria.terms
+                ]
+                fallback_query = fallback_query.filter(or_(*like_clauses))
+            books = fallback_query.all()
+            exact = False
     else:
+        # No query string: standard catalog browsing with applied filters
+        query = apply_db_filters(db.query(Book), criteria, extra)
+        books = query.all()
         exact = True
 
-    books.sort(key=lambda b: score_book(b, criteria), reverse=True)
-
+    # Sorting
     if sort == "title_asc":
         books.sort(key=lambda b: b.title.lower())
     elif sort == "title_desc":
@@ -249,6 +285,9 @@ def search_books(
         books.sort(key=lambda b: b.publication_year)
     elif sort == "availability":
         books.sort(key=lambda b: b.available_copies, reverse=True)
+    elif sort == "relevance" and criteria.scores:
+        # Default relevance sorts by semantic vector score descending
+        books.sort(key=lambda b: criteria.scores.get(b.id, 0.0), reverse=True)
 
     total = len(books)
     start = (page - 1) * page_size

@@ -83,6 +83,7 @@ class Rental(Base):
             "book_id",
             unique=True,
             sqlite_where=text("status IN ('active', 'overdue')"),
+            postgresql_where=text("status IN ('active', 'overdue')"),
         ),
     )
 

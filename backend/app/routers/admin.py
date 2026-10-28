@@ -16,6 +16,7 @@ from app.schemas import (
 )
 from sqlalchemy.exc import IntegrityError
 from app.services.rental import _book_status, _rental_out, return_book
+from app.services.vector_store import upsert_single_book
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -190,4 +191,5 @@ def add_book(
         db.rollback()
         raise HTTPException(409, "ISBN already exists")
     db.refresh(book)
+    upsert_single_book(book)
     return book

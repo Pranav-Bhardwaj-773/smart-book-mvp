@@ -1,30 +1,159 @@
+import argparse
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
+
 import bcrypt
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import AppSettings, Book, Notification, Rental, User
 
+logger = logging.getLogger(__name__)
+
 
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def _status(total: int, available: int, archived: bool = False) -> str:
-    if archived:
+def _status(total: int, available: int, book_status: str | None = None) -> str:
+    raw = (book_status or "").strip().lower()
+    if raw in ("archived", "lost"):
         return "archived"
-    if available <= 0:
+    if available <= 0 or raw in ("fully rented", "under maintenance"):
         return "unavailable"
     if available < total:
         return "partially_available"
     return "available"
 
 
-def seed_if_empty(db: Session) -> None:
-    if db.query(User).first() is not None:
-        return
+def _parse_dt(val: str | None) -> datetime | None:
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        return None
 
-    db.add_all(
-        [
+
+def get_books_json_path() -> Path:
+    candidates = [
+        Path(__file__).resolve().parent.parent / "books.json",
+        Path.cwd() / "books.json",
+        Path.cwd() / "backend" / "books.json",
+    ]
+    for p in candidates:
+        if p.exists() and p.is_file():
+            return p
+    return candidates[0]
+
+
+def load_books_from_json(
+    db: Session, force: bool = False, json_path: Path | str | None = None
+) -> int:
+    """
+    Load books from books.json into the DB table.
+    Auto-increments id starting from 1 (leaves id unset on Book instances).
+    """
+    path = Path(json_path) if json_path else get_books_json_path()
+    if not path.exists():
+        logger.error(f"books.json not found at {path}")
+        print(f"Error: books.json not found at {path}")
+        return 0
+
+    with open(path, "r", encoding="utf-8") as f:
+        books_data = json.load(f)
+
+    if force:
+        logger.info("Clearing existing books table for fresh reseed.")
+        db.query(Book).delete()
+        db.commit()
+
+    book_objects = []
+    for item in books_data:
+        isbn = str(item.get("isbn") or "").strip()
+        title = str(item.get("title") or "").strip()
+        subtitle = item.get("subtitle")
+
+        authors_raw = item.get("authors", [])
+        if isinstance(authors_raw, list):
+            authors = ", ".join(authors_raw)
+        else:
+            authors = str(authors_raw or "")
+
+        description = str(item.get("description") or "")
+        summary = str(item.get("summary") or "")
+        category = str(item.get("category") or "General")
+        genre = str(item.get("genre") or "General")
+        publisher = str(item.get("publisher") or "Unknown")
+        publication_year = int(item.get("publicationYear") or 2024)
+        language = str(item.get("language") or "English")
+        edition = str(item.get("edition") or "1st")
+        page_count = int(item.get("numberOfPages") or 100)
+        cover_url = item.get("coverImage") or f"https://picsum.photos/seed/{isbn}/240/360"
+
+        kw_raw = item.get("keywords", [])
+        keywords = ", ".join(kw_raw) if isinstance(kw_raw, list) else str(kw_raw or "")
+
+        tags_raw = item.get("searchTags", [])
+        search_tags = ", ".join(tags_raw) if isinstance(tags_raw, list) else str(tags_raw or "")
+
+        reading_level = str(item.get("readingLevel") or "general").lower()
+        total_copies = int(item.get("totalCopies") or 1)
+        avail_raw = item.get("availableCopies")
+        available_copies = int(avail_raw) if avail_raw is not None else total_copies
+        if available_copies > total_copies:
+            available_copies = total_copies
+        if available_copies < 0:
+            available_copies = 0
+
+        book_status = item.get("bookStatus")
+        status = _status(total_copies, available_copies, book_status)
+
+        created_at = _parse_dt(item.get("createdDate"))
+        updated_at = _parse_dt(item.get("updatedDate"))
+
+        # Primary key `id` is NOT passed, allowing SQLite to auto-increment from 1 upwards
+        book = Book(
+            isbn=isbn,
+            title=title,
+            subtitle=subtitle,
+            authors=authors,
+            description=description,
+            summary=summary,
+            category=category,
+            genre=genre,
+            language=language,
+            publisher=publisher,
+            publication_year=publication_year,
+            edition=edition,
+            page_count=page_count,
+            keywords=keywords,
+            search_tags=search_tags,
+            reading_level=reading_level,
+            cover_url=cover_url,
+            total_copies=total_copies,
+            available_copies=available_copies,
+            status=status,
+        )
+        if created_at:
+            book.created_at = created_at
+        if updated_at:
+            book.updated_at = updated_at
+
+        book_objects.append(book)
+
+    db.add_all(book_objects)
+    db.commit()
+    logger.info(f"Successfully loaded {len(book_objects)} books into database.")
+    return len(book_objects)
+
+
+def seed_if_empty(db: Session, force_books: bool = False) -> None:
+    """Ensure default admin, settings, and seed books from books.json."""
+    if db.query(User).first() is None:
+        db.add(
             User(
                 full_name="Library Admin",
                 email="admin@smartbook.local",
@@ -32,407 +161,46 @@ def seed_if_empty(db: Session) -> None:
                 phone="9990001111",
                 role="admin",
                 status="active",
-            ),
-        ]
-    )
-
-    db.add(AppSettings(default_rental_days=settings.default_rental_days))
-
-    books = [
-        {
-            "isbn": "9780134610993",
-            "title": "Artificial Intelligence: A Beginner's Guide",
-            "subtitle": "Learn AI without the jargon",
-            "authors": "Peter Scott",
-            "description": "A beginner-friendly introduction to artificial intelligence, machine learning, and everyday AI applications.",
-            "summary": "Explains core AI ideas in simple language for first-time learners.",
-            "category": "Technology",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "Tech Press",
-            "publication_year": 2021,
-            "page_count": 240,
-            "keywords": "artificial intelligence, AI, beginner, machine learning",
-            "search_tags": "beginner ai ml",
-            "reading_level": "beginner",
-            "total_copies": 3,
-            "available_copies": 3,
-        },
-        {
-            "isbn": "9781491957660",
-            "title": "Python Crash Course",
-            "subtitle": "A hands-on, project-based introduction",
-            "authors": "Eric Matthes",
-            "description": "Learn Python programming from scratch with practical projects suitable for beginners.",
-            "summary": "Beginner Python book covering syntax, projects, and programming basics.",
-            "category": "Programming",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "No Starch Press",
-            "publication_year": 2019,
-            "page_count": 544,
-            "keywords": "python, programming, beginner, coding",
-            "search_tags": "python beginner",
-            "reading_level": "beginner",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780134685991",
-            "title": "Easy Data Structures",
-            "subtitle": "Simple explanations with examples",
-            "authors": "Narasimha Karumanchi",
-            "description": "An easy book to understand data structures: arrays, stacks, queues, trees, and graphs.",
-            "summary": "Gentle data-structures guide for students who find the topic difficult.",
-            "category": "Computer Science",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "CareerMonk",
-            "publication_year": 2017,
-            "page_count": 320,
-            "keywords": "data structures, algorithms, beginner, computer science",
-            "search_tags": "dsa easy",
-            "reading_level": "beginner",
-            "total_copies": 2,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780007117116",
-            "title": "The Murder on the Links",
-            "subtitle": None,
-            "authors": "Agatha Christie",
-            "description": "A short mystery novel featuring Hercule Poirot investigating a murder in France.",
-            "summary": "Classic short mystery / detective novel.",
-            "category": "Fiction",
-            "genre": "Mystery",
-            "language": "English",
-            "publisher": "HarperCollins",
-            "publication_year": 1923,
-            "page_count": 272,
-            "keywords": "mystery, detective, short novel, crime",
-            "search_tags": "short mystery",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780140446814",
-            "title": "The Discovery of India",
-            "subtitle": None,
-            "authors": "Jawaharlal Nehru",
-            "description": "A landmark work on Indian history, culture, and civilization written by an Indian author.",
-            "summary": "Indian history from ancient times through the independence movement.",
-            "category": "History",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "Penguin",
-            "publication_year": 1946,
-            "page_count": 656,
-            "keywords": "indian history, india, nehru, civilization",
-            "search_tags": "indian history english",
-            "reading_level": "advanced",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780140449884",
-            "title": "Gitanjali",
-            "subtitle": "Song Offerings",
-            "authors": "Rabindranath Tagore",
-            "description": "Nobel Prize-winning collection of poems by Rabindranath Tagore.",
-            "summary": "Lyric poems on devotion, nature, and humanity.",
-            "category": "Literature",
-            "genre": "Poetry",
-            "language": "English",
-            "publisher": "Penguin Classics",
-            "publication_year": 1912,
-            "page_count": 128,
-            "keywords": "tagore, poetry, indian author, gitanjali",
-            "search_tags": "tagore indian author",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780140449990",
-            "title": "The Home and the World",
-            "subtitle": None,
-            "authors": "Rabindranath Tagore",
-            "description": "A novel by Rabindranath Tagore set during the Swadeshi movement in Bengal.",
-            "summary": "Political and personal conflict in early 20th-century India.",
-            "category": "Literature",
-            "genre": "Historical Fiction",
-            "language": "English",
-            "publisher": "Penguin",
-            "publication_year": 1916,
-            "page_count": 240,
-            "keywords": "tagore, indian author, novel, bengal",
-            "search_tags": "tagore",
-            "reading_level": "general",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780439708180",
-            "title": "Harry Potter and the Sorcerer's Stone",
-            "subtitle": None,
-            "authors": "J.K. Rowling",
-            "description": "A young wizard discovers a hidden magical world at Hogwarts School.",
-            "summary": "Fantasy adventure for readers who like magic schools and coming-of-age stories.",
-            "category": "Fiction",
-            "genre": "Fantasy",
-            "language": "English",
-            "publisher": "Scholastic",
-            "publication_year": 1997,
-            "page_count": 309,
-            "keywords": "harry potter, magic, wizard, fantasy, hogwarts",
-            "search_tags": "similar harry potter fantasy",
-            "reading_level": "beginner",
-            "total_copies": 3,
-            "available_copies": 3,
-        },
-        {
-            "isbn": "9780547928227",
-            "title": "The Hobbit",
-            "subtitle": None,
-            "authors": "J.R.R. Tolkien",
-            "description": "A hobbit joins dwarves on a quest through a magical world of dragons and adventure. Similar in spirit to Harry Potter for fantasy readers.",
-            "summary": "Classic fantasy quest novel.",
-            "category": "Fiction",
-            "genre": "Fantasy",
-            "language": "English",
-            "publisher": "Houghton Mifflin",
-            "publication_year": 1937,
-            "page_count": 310,
-            "keywords": "fantasy, magic, adventure, dragons, similar to harry potter",
-            "search_tags": "similar harry potter fantasy",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9781591847816",
-            "title": "Leaders Eat Last",
-            "subtitle": "Why some teams pull together and others don't",
-            "authors": "Simon Sinek",
-            "description": "Practical leadership book about trust, teams, and creating safe workplaces.",
-            "summary": "Popular leadership and management non-fiction.",
-            "category": "Business",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "Portfolio",
-            "publication_year": 2014,
-            "page_count": 368,
-            "keywords": "leadership, management, teams, business",
-            "search_tags": "leadership available",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780593236598",
-            "title": "Project Hail Mary",
-            "subtitle": None,
-            "authors": "Andy Weir",
-            "description": "A science-fiction novel published after 2020 about a lone astronaut trying to save Earth.",
-            "summary": "Recent sci-fi adventure with science problem-solving.",
-            "category": "Fiction",
-            "genre": "Science Fiction",
-            "language": "English",
-            "publisher": "Ballantine",
-            "publication_year": 2021,
-            "page_count": 496,
-            "keywords": "science fiction, sci-fi, space, after 2020",
-            "search_tags": "scifi 2021",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9781250231215",
-            "title": "A Psalm for the Wild-Built",
-            "subtitle": None,
-            "authors": "Becky Chambers",
-            "description": "A short hopeful science-fiction novella published after 2020.",
-            "summary": "Short sci-fi about a monk, a robot, and purpose.",
-            "category": "Fiction",
-            "genre": "Science Fiction",
-            "language": "English",
-            "publisher": "Tordotcom",
-            "publication_year": 2021,
-            "page_count": 160,
-            "keywords": "science fiction, short, sci-fi, after 2020",
-            "search_tags": "short scifi",
-            "reading_level": "general",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9781591846444",
-            "title": "The Lean Project Manager",
-            "subtitle": "Delivering results with fewer than 300 pages of fluff",
-            "authors": "James Lewis",
-            "description": "A concise project management book under 300 pages covering planning, risk, and teams.",
-            "summary": "Practical PM guide, short length.",
-            "category": "Business",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "PM Press",
-            "publication_year": 2018,
-            "page_count": 248,
-            "keywords": "project management, pm, leadership, short",
-            "search_tags": "project management under 300",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-        {
-            "isbn": "9780143107163",
-            "title": "India After Gandhi",
-            "subtitle": "The history of the world's largest democracy",
-            "authors": "Ramachandra Guha",
-            "description": "Modern Indian history by an Indian historian, covering politics and society after independence.",
-            "summary": "Post-independence Indian history in English.",
-            "category": "History",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "Penguin",
-            "publication_year": 2007,
-            "page_count": 898,
-            "keywords": "indian history, india, democracy, guha",
-            "search_tags": "indian history english available",
-            "reading_level": "advanced",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780262033848",
-            "title": "Deep Learning",
-            "subtitle": None,
-            "authors": "Ian Goodfellow, Yoshua Bengio, Aaron Courville",
-            "description": "Advanced textbook on deep learning and neural networks. Not a beginner AI book.",
-            "summary": "Graduate-level AI / deep learning reference.",
-            "category": "Technology",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "MIT Press",
-            "publication_year": 2016,
-            "page_count": 800,
-            "keywords": "artificial intelligence, deep learning, neural networks, advanced",
-            "search_tags": "ai advanced",
-            "reading_level": "advanced",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780000000001",
-            "title": "The Last Copy Mystery",
-            "subtitle": "Only one copy left",
-            "authors": "A. Concurrent",
-            "description": "A mystery novel used to test last-copy concurrent rentals.",
-            "summary": "Demo book with a single available copy.",
-            "category": "Fiction",
-            "genre": "Mystery",
-            "language": "English",
-            "publisher": "MVP Books",
-            "publication_year": 2022,
-            "page_count": 180,
-            "keywords": "mystery, concurrent, last copy",
-            "search_tags": "one copy",
-            "reading_level": "general",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780000000002",
-            "title": "Sold Out Leadership",
-            "subtitle": "Currently unavailable",
-            "authors": "No Copies",
-            "description": "A leadership book with zero available copies for unavailability demos.",
-            "summary": "Demo unavailable inventory.",
-            "category": "Business",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "MVP Books",
-            "publication_year": 2020,
-            "page_count": 200,
-            "keywords": "leadership, unavailable",
-            "search_tags": "zero copies",
-            "reading_level": "general",
-            "total_copies": 2,
-            "available_copies": 0,
-        },
-        {
-            "isbn": "9780000000003",
-            "title": "Archived Atlas of Forgotten Maps",
-            "subtitle": "No longer rentable",
-            "authors": "Old Stock",
-            "description": "An archived catalog title that must remain in history but cannot be rented.",
-            "summary": "Demo archived book.",
-            "category": "Reference",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "MVP Books",
-            "publication_year": 1999,
-            "page_count": 400,
-            "keywords": "archived, atlas, maps",
-            "search_tags": "archived",
-            "reading_level": "general",
-            "total_copies": 1,
-            "available_copies": 1,
-            "archived": True,
-        },
-        {
-            "isbn": "9780140444308",
-            "title": "Gora",
-            "subtitle": None,
-            "authors": "Rabindranath Tagore",
-            "description": "A major novel by Rabindranath Tagore exploring identity and Indian society.",
-            "summary": "Another Tagore title for author search demos.",
-            "category": "Literature",
-            "genre": "Fiction",
-            "language": "English",
-            "publisher": "Penguin",
-            "publication_year": 1910,
-            "page_count": 520,
-            "keywords": "tagore, indian author, novel",
-            "search_tags": "tagore",
-            "reading_level": "general",
-            "total_copies": 1,
-            "available_copies": 1,
-        },
-        {
-            "isbn": "9780596009205",
-            "title": "Head First Python",
-            "subtitle": "A brain-friendly guide",
-            "authors": "Paul Barry",
-            "description": "A Python programming book suitable for beginners who prefer a visual, friendly style.",
-            "summary": "Beginner Python with a light tone.",
-            "category": "Programming",
-            "genre": "Non-fiction",
-            "language": "English",
-            "publisher": "O'Reilly",
-            "publication_year": 2010,
-            "page_count": 494,
-            "keywords": "python, programming, beginner",
-            "search_tags": "python beginner",
-            "reading_level": "beginner",
-            "total_copies": 2,
-            "available_copies": 2,
-        },
-    ]
-
-    for item in books:
-        archived = item.pop("archived", False)
-        total = item["total_copies"]
-        available = item["available_copies"]
-        db.add(
-            Book(
-                **item,
-                edition="1st",
-                cover_url=f"https://picsum.photos/seed/{item['isbn']}/240/360",
-                status=_status(total, available, archived),
             )
         )
+        db.commit()
 
-    db.commit()
+    if db.query(AppSettings).first() is None:
+        db.add(AppSettings(default_rental_days=settings.default_rental_days))
+        db.commit()
+
+    if force_books or db.query(Book).count() == 0:
+        load_books_from_json(db, force=force_books)
+
+
+if __name__ == "__main__":
+    from app.database import SessionLocal
+
+    parser = argparse.ArgumentParser(description="Seed database from books.json")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Clear existing books and reload all books from books.json with auto-increment ID",
+    )
+    parser.add_argument(
+        "--index",
+        action="store_true",
+        help="Also re-index Qdrant vector database after seeding",
+    )
+    args = parser.parse_args()
+
+    session = SessionLocal()
+    try:
+        # Ensure admin user and settings exist
+        seed_if_empty(session, force_books=args.force)
+        count = session.query(Book).count()
+        print(f"Database seeded successfully. Total books in DB: {count}")
+
+        if args.index:
+            from app.services.vector_store import index_books_from_db
+
+            print("Re-indexing books into Qdrant vector DB...")
+            indexed = index_books_from_db(session, recreate=True)
+            print(f"Indexed {indexed} books into Qdrant vector DB.")
+    finally:
+        session.close()
