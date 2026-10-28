@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { Book, User } from "@/lib/types";
+import { Spinner } from "@/components/ui/spinner";
 
 type AdminStats = {
   books: number;
@@ -103,9 +104,14 @@ export default function AdminPage() {
 
   if (!ready) {
     return (
-      <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">
-        Loading…
-      </p>
+      <div
+        className="flex flex-col items-center justify-center gap-3 py-16"
+        role="status"
+        aria-live="polite"
+      >
+        <Spinner className="size-8" />
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
     );
   }
 

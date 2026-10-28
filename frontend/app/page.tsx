@@ -10,31 +10,27 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/components/auth-provider";
 
 export default function HomePage() {
   const router = useRouter();
   const { user } = useAuth();
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState("relevance");
-  const [language, setLanguage] = useState("");
-  const [availableOnly, setAvailableOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<BookList | null>(null);
   const [dash, setDash] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function load(nextPage = page, query = q) {
     setError("");
+    setLoading(true);
     try {
       const list = await api.books({
         q: query,
         page: nextPage,
-        sort,
-        language: language || undefined,
-        available_only: availableOnly,
       });
       setData(list);
       setPage(nextPage);
@@ -46,13 +42,19 @@ export default function HomePage() {
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "We could not complete your search. Please try again.");
+      setError(
+        e instanceof Error
+          ? e.message
+          : "We could not complete your search. Please try again.",
+      );
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
     load(1, q);
-  }, [sort, language, availableOnly, user]);
+  }, [user]);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -73,7 +75,10 @@ export default function HomePage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.page_size ?? 12)));
+  const totalPages = Math.max(
+    1,
+    Math.ceil((data?.total ?? 0) / (data?.page_size ?? 12)),
+  );
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6">
@@ -89,50 +94,12 @@ export default function HomePage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search books, authors, or topics"
+            placeholder="Search what you like to read"
             className="h-10"
           />
-          <Button type="submit" className="h-10 px-4">
+          <Button type="submit" className="h-10 px-4" disabled={loading}>
+            {loading && <Spinner data-icon="inline-start" />}
             Search
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <NativeSelect value={sort} onChange={(e) => setSort(e.target.value)}>
-            <option value="relevance">Relevance</option>
-            <option value="title_asc">Title A–Z</option>
-            <option value="title_desc">Title Z–A</option>
-            <option value="year_new">Newest year</option>
-            <option value="year_old">Oldest year</option>
-            <option value="availability">Availability</option>
-          </NativeSelect>
-          <NativeSelect
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-          >
-            <option value="">All languages</option>
-            <option value="English">English</option>
-            <option value="Hindi">Hindi</option>
-          </NativeSelect>
-          <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-input px-2.5 text-sm">
-            <input
-              type="checkbox"
-              className="size-3.5 accent-current"
-              checked={availableOnly}
-              onChange={(e) => setAvailableOnly(e.target.checked)}
-            />
-            Available only
-          </label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setLanguage("");
-              setAvailableOnly(false);
-              setSort("relevance");
-            }}
-          >
-            Clear filters
           </Button>
         </div>
       </form>
@@ -152,85 +119,108 @@ export default function HomePage() {
           {data.message}
         </p>
       )}
-      <p className="text-sm text-muted-foreground">
-        {data?.total ?? 0} books · page {data?.page ?? 1} of {totalPages}
-      </p>
 
-      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {data?.items.map((b) => {
-          const hasThis = dash?.current.some((r) => r.book_id === b.id);
-          const atLimit = (dash?.active_count ?? 0) >= (dash?.max_allowed ?? 2);
-          const blocked =
-            b.status === "archived" ||
-            b.available_copies <= 0 ||
-            Boolean(user && (hasThis || atLimit));
-          return (
-            <li key={b.id}>
-              <Card className="gap-0 py-0">
-                <div className="flex gap-3 p-4 lg:flex-col">
-                  <BookAvatar title={b.title} coverUrl={b.cover_url} className="lg:size-16" />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="font-medium leading-snug max-lg:truncate lg:line-clamp-2">{b.title}</h2>
-                    <p className="truncate text-sm text-muted-foreground">{b.authors}</p>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {b.category ? (
-                        <Badge variant="outline">{b.category}</Badge>
-                      ) : null}
-                      <Badge variant="outline">{b.publication_year}</Badge>
+      {loading ? (
+        <div
+          className="flex flex-col items-center justify-center gap-3 py-16"
+          role="status"
+          aria-live="polite"
+        >
+          <Spinner className="size-8" />
+          <p className="text-sm text-muted-foreground">Searching books…</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            {data?.total ?? 0} books · page {data?.page ?? 1} of {totalPages}
+          </p>
+
+          <ul className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+            {data?.items.map((b) => {
+              const hasThis = dash?.current.some((r) => r.book_id === b.id);
+              const atLimit = (dash?.active_count ?? 0) >= (dash?.max_allowed ?? 2);
+              const blocked =
+                b.status === "archived" ||
+                b.available_copies <= 0 ||
+                Boolean(user && (hasThis || atLimit));
+              return (
+                <li key={b.id}>
+                  <Card className="gap-0 py-0">
+                    <div className="flex gap-3 p-4 lg:flex-col">
+                      <BookAvatar
+                        title={b.title}
+                        coverUrl={b.cover_url}
+                        className="lg:size-16"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <h2 className="font-medium leading-snug max-lg:truncate lg:line-clamp-2">
+                          {b.title}
+                        </h2>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {b.authors}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {b.category ? (
+                            <Badge variant="outline">{b.category}</Badge>
+                          ) : null}
+                          <Badge variant="outline">{b.publication_year}</Badge>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 border-t px-4 py-3 lg:flex-col lg:items-stretch">
-                  <p className="text-xs text-muted-foreground">
-                    {b.status.replaceAll("_", " ")} · {b.available_copies} available
-                  </p>
-                  <div className="flex shrink-0 gap-2 lg:justify-end">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      nativeButton={false}
-                      render={<Link href={`/books/${b.id}`} />}
-                    >
-                      Details
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(user && blocked)}
-                      onClick={() => rentFromCard(b)}
-                    >
-                      Rent
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            </li>
-          );
-        })}
-      </ul>
+                    <div className="flex items-center justify-between gap-2 border-t px-4 py-3 lg:flex-col lg:items-stretch">
+                      <p className="text-xs text-muted-foreground">
+                        {b.status.replaceAll("_", " ")} · {b.available_copies}{" "}
+                        available
+                      </p>
+                      <div className="flex shrink-0 gap-2 lg:justify-end">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          nativeButton={false}
+                          render={<Link href={`/books/${b.id}`} />}
+                        >
+                          Details
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={Boolean(user && blocked)}
+                          onClick={() => rentFromCard(b)}
+                        >
+                          Rent
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                </li>
+              );
+            })}
+          </ul>
 
-      {data && data.items.length === 0 && (
-        <p className="rounded-xl border px-4 py-8 text-center text-sm text-muted-foreground">
-          No books match this search.
-        </p>
+          {data && data.items.length === 0 && (
+            <p className="rounded-xl border px-4 py-8 text-center text-sm text-muted-foreground">
+              No books match this search.
+            </p>
+          )}
+
+          <div className="flex justify-center gap-2">
+            <Button
+              variant="outline"
+              disabled={page <= 1 || loading}
+              onClick={() => load(page - 1, q)}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              disabled={page >= totalPages || loading}
+              onClick={() => load(page + 1, q)}
+            >
+              Next
+            </Button>
+          </div>
+        </>
       )}
-
-      <div className="flex justify-center gap-2">
-        <Button
-          variant="outline"
-          disabled={page <= 1}
-          onClick={() => load(page - 1, q)}
-        >
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          disabled={page >= totalPages}
-          onClick={() => load(page + 1, q)}
-        >
-          Next
-        </Button>
-      </div>
     </div>
   );
 }

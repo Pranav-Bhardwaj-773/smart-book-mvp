@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
+import { Spinner } from "@/components/ui/spinner";
 
 function BookPage() {
   const { id } = useParams<{ id: string }>();
@@ -53,9 +54,14 @@ function BookPage() {
 
   if (!book) {
     return (
-      <p className="mx-auto max-w-2xl px-4 py-8 text-sm text-muted-foreground">
-        {msg || "Loading…"}
-      </p>
+      <div
+        className="flex flex-col items-center justify-center gap-3 py-16"
+        role="status"
+        aria-live="polite"
+      >
+        <Spinner className="size-8" />
+        <p className="text-sm text-muted-foreground">{msg || "Loading…"}</p>
+      </div>
     );
   }
 
@@ -125,9 +131,14 @@ export default function BookPageRoute() {
   return (
     <Suspense
       fallback={
-        <p className="mx-auto max-w-2xl px-4 py-8 text-sm text-muted-foreground">
-          Loading…
-        </p>
+        <div
+          className="flex flex-col items-center justify-center gap-3 py-16"
+          role="status"
+          aria-live="polite"
+        >
+          <Spinner className="size-8" />
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        </div>
       }
     >
       <BookPage />

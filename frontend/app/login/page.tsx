@@ -5,15 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/auth-provider";
+import { Spinner } from "@/components/ui/spinner";
 
 function LoginForm() {
   const router = useRouter();
@@ -21,9 +16,12 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    setPending(true);
     try {
       const { access_token } = await api.login({ email, password });
       await login(access_token);
@@ -31,6 +29,8 @@ function LoginForm() {
       router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setPending(false);
     }
   }
 
@@ -69,7 +69,8 @@ function LoginForm() {
               className="h-10"
             />
           </label>
-          <Button type="submit" className="h-10 w-full">
+          <Button type="submit" className="h-10 w-full" disabled={pending}>
+            {pending ? <Spinner className="size-4" /> : "Sign in"}
             Sign in
           </Button>
           <p className="text-sm text-muted-foreground">
