@@ -1,13 +1,13 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { Book, Dashboard } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
 
-export default function BookPage() {
+function BookPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { user, ready } = useAuth();
@@ -86,5 +86,13 @@ export default function BookPage() {
       </Button>
       {(reason || msg) && <p className="text-sm">{msg || reason}</p>}
     </div>
+  );
+}
+
+export default function BookPageRoute() {
+  return (
+    <Suspense fallback={<p className="p-6">Loading…</p>}>
+      <BookPage />
+    </Suspense>
   );
 }
