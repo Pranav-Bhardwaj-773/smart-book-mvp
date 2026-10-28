@@ -27,7 +27,7 @@ app = FastAPI(title="Smart Book API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://smartbook-frontend.vercel.app"],
+    allow_origins=["http://localhost:3000","https://frontend-olive-eight-45.vercel.app/"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
