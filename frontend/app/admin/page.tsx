@@ -68,7 +68,28 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!ready || user?.role !== "admin") return;
-    reload();
+    let cancelled = false;
+    setMsg("");
+    Promise.all([
+      api.adminStats() as Promise<AdminStats>,
+      api.adminBooks(),
+      api.adminUsers(),
+      api.adminRentals(rentalStatus) as Promise<AdminRental[]>,
+    ])
+      .then(([s, b, u, r]) => {
+        if (cancelled) return;
+        setStats(s);
+        setBooks(b);
+        setUsers(u);
+        setRentals(r);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setMsg(e instanceof Error ? e.message : "Failed to load admin data");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [ready, user, rentalStatus]);
 
   async function run(fn: () => Promise<unknown>) {

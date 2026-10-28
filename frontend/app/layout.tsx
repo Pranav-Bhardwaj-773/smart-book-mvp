@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -29,13 +28,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <body className="flex min-h-full flex-col">
         <AuthProvider>
-          <Suspense
-            fallback={
-              <header className="sticky top-0 z-40 h-14 border-b bg-background" />
-            }
-          >
-            <SiteHeader />
-          </Suspense>
+          <SiteHeader />
           <main className="flex-1">{children}</main>
         </AuthProvider>
       </body>

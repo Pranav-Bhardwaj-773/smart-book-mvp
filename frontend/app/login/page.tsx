@@ -1,8 +1,8 @@
 "use client";
 
-import { FormEvent, useState, Suspense } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,6 @@ import { useAuth } from "@/components/auth-provider";
 function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
-  const next = useSearchParams().get("next") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -28,7 +27,8 @@ function LoginForm() {
     try {
       const { access_token } = await api.login({ email, password });
       await login(access_token);
-      router.push(next);
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.push(next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     }
@@ -87,9 +87,7 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <div className="mx-auto flex w-full max-w-sm px-4 py-10">
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <LoginForm />
-      </Suspense>
+      <LoginForm />
     </div>
   );
 }
