@@ -1,11 +1,18 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useState, Suspense } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Suspense } from "react";
 import { useAuth } from "@/components/auth-provider";
 
 function LoginForm() {
@@ -28,34 +35,61 @@ function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="max-w-sm mx-auto p-6 space-y-3">
-      <h1 className="text-xl font-semibold">Sign in</h1>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <Input
-        type="email"
-        placeholder="Enter your email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
-      <Input
-        type="password"
-        placeholder="Enter your password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
-      <Button type="submit" className="w-full">
-        Sign in
-      </Button>
-    </form>
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>Use your Smart Book account to rent books.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="space-y-3">
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <label className="block space-y-1.5 text-sm">
+            <span className="text-muted-foreground">Email</span>
+            <Input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="h-10"
+            />
+          </label>
+          <label className="block space-y-1.5 text-sm">
+            <span className="text-muted-foreground">Password</span>
+            <Input
+              type="password"
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="h-10"
+            />
+          </label>
+          <Button type="submit" className="h-10 w-full">
+            Sign in
+          </Button>
+          <p className="text-sm text-muted-foreground">
+            New here?{" "}
+            <Link href="/register" className="text-foreground underline underline-offset-4">
+              Create an account
+            </Link>
+          </p>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense>
-      <LoginForm />
-    </Suspense>
+    <div className="mx-auto flex w-full max-w-sm px-4 py-10">
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+        <LoginForm />
+      </Suspense>
+    </div>
   );
 }

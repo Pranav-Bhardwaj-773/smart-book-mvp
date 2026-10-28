@@ -5,8 +5,12 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { Book, BookList, Dashboard } from "@/lib/types";
+import { BookAvatar } from "@/components/book-avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useAuth } from "@/components/auth-provider";
 
 export default function HomePage() {
@@ -72,41 +76,47 @@ export default function HomePage() {
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.page_size ?? 12)));
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
+      <div className="space-y-1">
+        <h1 className="text-lg font-semibold tracking-tight">Catalog</h1>
+        <p className="text-sm text-muted-foreground">
+          Search the shelf and rent a book.
+        </p>
+      </div>
+
       <form onSubmit={onSearch} className="flex flex-col gap-3">
         <div className="flex gap-2">
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search naturally, for example: beginner books about artificial intelligence"
+            placeholder="Search books, authors, or topics"
+            className="h-10"
           />
-          <Button type="submit">Search</Button>
+          <Button type="submit" className="h-10 px-4">
+            Search
+          </Button>
         </div>
-        <div className="flex flex-wrap gap-2 items-center text-sm">
-          <select
-            className="border rounded h-8 px-2"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
+        <div className="flex flex-wrap items-center gap-2">
+          <NativeSelect value={sort} onChange={(e) => setSort(e.target.value)}>
             <option value="relevance">Relevance</option>
             <option value="title_asc">Title A–Z</option>
             <option value="title_desc">Title Z–A</option>
             <option value="year_new">Newest year</option>
             <option value="year_old">Oldest year</option>
             <option value="availability">Availability</option>
-          </select>
-          <select
-            className="border rounded h-8 px-2"
+          </NativeSelect>
+          <NativeSelect
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
           >
             <option value="">All languages</option>
             <option value="English">English</option>
             <option value="Hindi">Hindi</option>
-          </select>
-          <label className="flex items-center gap-1">
+          </NativeSelect>
+          <label className="flex h-8 cursor-pointer items-center gap-2 rounded-lg border border-input px-2.5 text-sm">
             <input
               type="checkbox"
+              className="size-3.5 accent-current"
               checked={availableOnly}
               onChange={(e) => setAvailableOnly(e.target.checked)}
             />
@@ -127,14 +137,26 @@ export default function HomePage() {
         </div>
       </form>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {msg && <p className="text-sm">{msg}</p>}
-      {data?.message && <p className="text-sm text-amber-700">{data.message}</p>}
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      {msg && (
+        <p className="text-sm text-muted-foreground" role="status">
+          {msg}
+        </p>
+      )}
+      {data?.message && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          {data.message}
+        </p>
+      )}
       <p className="text-sm text-muted-foreground">
         {data?.total ?? 0} books · page {data?.page ?? 1} of {totalPages}
       </p>
 
-      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="flex flex-col gap-3">
         {data?.items.map((b) => {
           const hasThis = dash?.current.some((r) => r.book_id === b.id);
           const atLimit = (dash?.active_count ?? 0) >= (dash?.max_allowed ?? 2);
@@ -143,39 +165,55 @@ export default function HomePage() {
             b.available_copies <= 0 ||
             Boolean(user && (hasThis || atLimit));
           return (
-            <li key={b.id} className="border rounded-lg p-3 space-y-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={b.cover_url ?? ""}
-                alt={`Cover of ${b.title}`}
-                className="w-full h-48 object-cover rounded"
-              />
-              <h2 className="font-medium">{b.title}</h2>
-              <p className="text-sm">{b.authors}</p>
-              <p className="text-sm">
-                {b.status.replaceAll("_", " ")} · {b.available_copies} available
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  nativeButton={false}
-                  render={<Link href={`/books/${b.id}`} />}
-                >
-                  View details
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={Boolean(user && blocked)}
-                  onClick={() => rentFromCard(b)}
-                >
-                  {!user ? "Please sign in to rent this book." : "Rent"}
-                </Button>
-              </div>
+            <li key={b.id}>
+              <Card className="gap-0 py-0">
+                <div className="flex gap-3 p-4">
+                  <BookAvatar title={b.title} coverUrl={b.cover_url} />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="truncate font-medium leading-snug">{b.title}</h2>
+                    <p className="truncate text-sm text-muted-foreground">{b.authors}</p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {b.category ? (
+                        <Badge variant="outline">{b.category}</Badge>
+                      ) : null}
+                      <Badge variant="outline">{b.publication_year}</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    {b.status.replaceAll("_", " ")} · {b.available_copies} available
+                  </p>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      nativeButton={false}
+                      render={<Link href={`/books/${b.id}`} />}
+                    >
+                      Details
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={Boolean(user && blocked)}
+                      onClick={() => rentFromCard(b)}
+                    >
+                      Rent
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             </li>
           );
         })}
       </ul>
+
+      {data && data.items.length === 0 && (
+        <p className="rounded-xl border px-4 py-8 text-center text-sm text-muted-foreground">
+          No books match this search.
+        </p>
+      )}
 
       <div className="flex justify-center gap-2">
         <Button

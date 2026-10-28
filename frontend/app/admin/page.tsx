@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/components/auth-provider";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import type { Book, User } from "@/lib/types";
 
 type AdminStats = {
@@ -78,13 +80,19 @@ export default function AdminPage() {
     }
   }
 
-  if (!ready) return <p className="p-6">Loading…</p>;
+  if (!ready) {
+    return (
+      <p className="mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">
+        Loading…
+      </p>
+    );
+  }
 
   if (!user || user.role !== "admin") {
     return (
-      <div className="p-6 space-y-2">
+      <div className="mx-auto max-w-5xl space-y-2 px-4 py-8">
         <p>Admin only. Sign in as admin@smartbook.local</p>
-        <Link href="/login" className="underline text-sm">
+        <Link href="/login" className="text-sm underline underline-offset-4">
           Sign in
         </Link>
       </div>
@@ -92,15 +100,37 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-4">
-      <h1 className="text-xl font-semibold">Administrator</h1>
-      {stats && (
+    <div className="mx-auto w-full max-w-5xl space-y-4 px-4 py-6">
+      <div className="space-y-1">
+        <h1 className="text-lg font-semibold tracking-tight">Administrator</h1>
         <p className="text-sm text-muted-foreground">
-          Books {stats.books} · Users {stats.users} · Active rentals{" "}
-          {stats.active_rentals} · Overdue {stats.overdue_rentals}
+          Books, members, and rentals.
+        </p>
+      </div>
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {(
+            [
+              ["Books", stats.books],
+              ["Users", stats.users],
+              ["Active", stats.active_rentals],
+              ["Overdue", stats.overdue_rentals],
+            ] as const
+          ).map(([label, value]) => (
+            <Card key={label} size="sm" className="py-0">
+              <CardContent className="p-3">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <p className="text-lg font-medium">{value}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+      {msg && (
+        <p className="text-sm text-destructive" role="alert">
+          {msg}
         </p>
       )}
-      {msg && <p className="text-sm text-red-600">{msg}</p>}
 
       <div className="flex gap-2">
         <Button
@@ -129,7 +159,7 @@ export default function AdminPage() {
       {tab === "books" && (
         <div className="space-y-4">
           <form
-            className="grid sm:grid-cols-2 gap-2 border rounded p-3"
+            className="grid gap-2 rounded-xl border p-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               run(() =>
@@ -184,25 +214,27 @@ export default function AdminPage() {
             <Button type="submit">Add book</Button>
           </form>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+          <Card className="gap-0 overflow-hidden py-0">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="p-2">Title</th>
-                  <th className="p-2">Copies</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Actions</th>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">Title</th>
+                  <th className="px-4 py-2 font-medium">Copies</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {books.map((b) => (
-                  <tr key={b.id} className="border-b">
-                    <td className="p-2">{b.title}</td>
-                    <td className="p-2">
+                  <tr key={b.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">{b.title}</td>
+                    <td className="px-4 py-3">
                       {b.available_copies}/{b.total_copies}
                     </td>
-                    <td className="p-2">{b.status.replaceAll("_", " ")}</td>
-                    <td className="p-2 flex flex-wrap gap-1">
+                    <td className="px-4 py-3">{b.status.replaceAll("_", " ")}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
                       <Button
                         size="sm"
                         onClick={() => run(() => api.adminInventory(b.id, 1))}
@@ -232,35 +264,39 @@ export default function AdminPage() {
                           Archive
                         </Button>
                       )}
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </Card>
         </div>
       )}
 
       {tab === "users" && (
+        <Card className="gap-0 overflow-hidden py-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="text-left border-b">
-                <th className="p-2">Name</th>
-                <th className="p-2">Email</th>
-                <th className="p-2">Role</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">Actions</th>
+              <tr className="border-b text-left text-muted-foreground">
+                <th className="px-4 py-2 font-medium">Name</th>
+                <th className="px-4 py-2 font-medium">Email</th>
+                <th className="px-4 py-2 font-medium">Role</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => (
-                <tr key={u.id} className="border-b">
-                  <td className="p-2">{u.full_name}</td>
-                  <td className="p-2">{u.email}</td>
-                  <td className="p-2">{u.role}</td>
-                  <td className="p-2">{u.status}</td>
-                  <td className="p-2 flex gap-1">
+                <tr key={u.id} className="border-b last:border-0">
+                  <td className="px-4 py-3">{u.full_name}</td>
+                  <td className="px-4 py-3">{u.email}</td>
+                  <td className="px-4 py-3">{u.role}</td>
+                  <td className="px-4 py-3">{u.status}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
                     {u.role !== "admin" && (
                       <>
                         <Button
@@ -283,18 +319,19 @@ export default function AdminPage() {
                         </Button>
                       </>
                     )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        </Card>
       )}
 
       {tab === "rentals" && (
         <div className="space-y-3">
-          <select
-            className="border rounded h-8 px-2 text-sm"
+          <NativeSelect
             value={rentalStatus}
             onChange={(e) => setRentalStatus(e.target.value)}
           >
@@ -302,34 +339,35 @@ export default function AdminPage() {
             <option value="active">Active</option>
             <option value="overdue">Overdue</option>
             <option value="returned">Returned</option>
-          </select>
+          </NativeSelect>
+          <Card className="gap-0 overflow-hidden py-0">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="p-2">ID</th>
-                  <th className="p-2">User</th>
-                  <th className="p-2">Book</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Due</th>
-                  <th className="p-2">Actions</th>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="px-4 py-2 font-medium">ID</th>
+                  <th className="px-4 py-2 font-medium">User</th>
+                  <th className="px-4 py-2 font-medium">Book</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Due</th>
+                  <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rentals.map((r) => (
-                  <tr key={r.id} className="border-b">
-                    <td className="p-2">{r.id}</td>
-                    <td className="p-2">
+                  <tr key={r.id} className="border-b last:border-0">
+                    <td className="px-4 py-3">{r.id}</td>
+                    <td className="px-4 py-3">
                       {r.user_name}
                       <br />
                       <span className="text-muted-foreground">
                         {r.user_email}
                       </span>
                     </td>
-                    <td className="p-2">{r.book_title}</td>
-                    <td className="p-2">{r.status}</td>
-                    <td className="p-2">{r.due_at.slice(0, 10)}</td>
-                    <td className="p-2">
+                    <td className="px-4 py-3">{r.book_title}</td>
+                    <td className="px-4 py-3">{r.status}</td>
+                    <td className="px-4 py-3">{r.due_at.slice(0, 10)}</td>
+                    <td className="px-4 py-3">
                       {(r.status === "active" || r.status === "overdue") && (
                         <Button
                           size="sm"
@@ -344,6 +382,7 @@ export default function AdminPage() {
               </tbody>
             </table>
           </div>
+          </Card>
         </div>
       )}
     </div>

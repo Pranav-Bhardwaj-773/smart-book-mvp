@@ -4,7 +4,10 @@ import { useParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { Book, Dashboard } from "@/lib/types";
+import { BookAvatar } from "@/components/book-avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { useAuth } from "@/components/auth-provider";
 
 function BookPage() {
@@ -48,12 +51,17 @@ function BookPage() {
     }
   }
 
-  if (!book) return <p className="p-6">{msg || "Loading…"}</p>;
+  if (!book) {
+    return (
+      <p className="mx-auto max-w-2xl px-4 py-8 text-sm text-muted-foreground">
+        {msg || "Loading…"}
+      </p>
+    );
+  }
 
   const archived = book.status === "archived";
   const noCopies = book.available_copies <= 0;
-  const hasThis =
-    dash?.current.some((r) => r.book_id === book.id) ?? false;
+  const hasThis = dash?.current.some((r) => r.book_id === book.id) ?? false;
   const atLimit = (dash?.active_count ?? 0) >= (dash?.max_allowed ?? 2);
 
   let reason = "";
@@ -68,30 +76,60 @@ function BookPage() {
   const disabled = Boolean(user && reason);
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-4">
-      <h1 className="text-2xl font-semibold">{book.title}</h1>
-      <p>{book.authors}</p>
-      <p>{book.description}</p>
-      <p>
-        {book.language} · {book.publication_year} · {book.page_count} pages ·{" "}
-        {book.reading_level}
-      </p>
-      <p>
-        Availability: {book.status.replaceAll("_", " ")} (
-        {book.available_copies} of {book.total_copies})
-      </p>
-      {dash && <p className="text-sm">{dash.capacity_message}</p>}
-      <Button onClick={rent} disabled={disabled}>
-        {!user ? "Sign in to rent" : disabled ? "Cannot rent" : "Rent"}
-      </Button>
-      {(reason || msg) && <p className="text-sm">{msg || reason}</p>}
+    <div className="mx-auto w-full max-w-2xl space-y-4 px-4 py-6">
+      <Card className="gap-0 py-0">
+        <div className="flex gap-4 p-4">
+          <BookAvatar
+            title={book.title}
+            coverUrl={book.cover_url}
+            className="size-16 text-base"
+          />
+          <div className="min-w-0 flex-1 space-y-2">
+            <h1 className="text-xl font-semibold tracking-tight">{book.title}</h1>
+            <p className="text-sm text-muted-foreground">{book.authors}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {book.category ? <Badge variant="outline">{book.category}</Badge> : null}
+              <Badge variant="outline">{book.language}</Badge>
+              <Badge variant="outline">{book.publication_year}</Badge>
+              <Badge variant="outline">{book.page_count} pages</Badge>
+              {book.reading_level ? (
+                <Badge variant="outline">{book.reading_level}</Badge>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        <div className="border-t px-4 py-4">
+          <p className="text-sm leading-relaxed">{book.description}</p>
+        </div>
+        <div className="flex flex-col gap-3 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-muted-foreground">
+            {book.status.replaceAll("_", " ")} · {book.available_copies} of{" "}
+            {book.total_copies} available
+          </p>
+          <Button variant="outline" onClick={rent} disabled={disabled}>
+            {!user ? "Sign in to rent" : disabled ? "Cannot rent" : "Rent"}
+          </Button>
+        </div>
+      </Card>
+      {dash && <p className="text-sm text-muted-foreground">{dash.capacity_message}</p>}
+      {(reason || msg) && (
+        <p className="text-sm text-muted-foreground" role="status">
+          {msg || reason}
+        </p>
+      )}
     </div>
   );
 }
 
 export default function BookPageRoute() {
   return (
-    <Suspense fallback={<p className="p-6">Loading…</p>}>
+    <Suspense
+      fallback={
+        <p className="mx-auto max-w-2xl px-4 py-8 text-sm text-muted-foreground">
+          Loading…
+        </p>
+      }
+    >
       <BookPage />
     </Suspense>
   );
