@@ -82,7 +82,7 @@ function BookPage() {
       </p>
       {dash && <p className="text-sm">{dash.capacity_message}</p>}
       <Button onClick={rent} disabled={disabled}>
-        {!user ? "Please sign in to rent this book" : disabled ? "Cannot rent" : "Rent"}
+        {!user ? "Sign in to rent" : disabled ? "Cannot rent" : "Rent"}
       </Button>
       {(reason || msg) && <p className="text-sm">{msg || reason}</p>}
     </div>
