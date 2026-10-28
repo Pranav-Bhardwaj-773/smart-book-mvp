@@ -5,7 +5,21 @@ const backendUrl = (
 ).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "unsplash.com",
+        pathname: "/photos/*/download",
+        search: "?force=true&w=400",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+    ],
+  },
   experimental: {
     agentFeedback: true,
   },
