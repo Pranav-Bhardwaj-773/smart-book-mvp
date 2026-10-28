@@ -175,11 +175,13 @@ def add_book(
     _: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
+    data = body.model_dump()
+    cover = data.pop("cover_url") or f"https://picsum.photos/seed/{body.isbn}/240/360"
     book = Book(
-        **body.model_dump(),
+        **data,
         available_copies=body.total_copies,
         status="available",
-        cover_url=body.cover_url or f"https://picsum.photos/seed/{body.isbn}/240/360",
+        cover_url=cover,
     )
     db.add(book)
     try:

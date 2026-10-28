@@ -183,13 +183,20 @@ export default function AdminPage() {
             className="grid gap-2 rounded-xl border p-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
-              run(() =>
-                api.adminAddBook({
+              run(async () => {
+                await api.adminAddBook({
                   ...newBook,
                   summary: newBook.description,
                   total_copies: Number(newBook.total_copies),
-                }),
-              );
+                });
+                setNewBook({
+                  isbn: "",
+                  title: "",
+                  authors: "",
+                  description: "",
+                  total_copies: 1,
+                });
+              });
             }}
           >
             <Input
