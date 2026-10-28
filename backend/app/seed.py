@@ -2,7 +2,7 @@ import bcrypt
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import AppSettings, Book, User
+from app.models import AppSettings, Book, Notification, Rental, User
 
 
 def hash_password(plain: str) -> str:
@@ -31,14 +31,6 @@ def seed_if_empty(db: Session) -> None:
                 password_hash=hash_password("Admin123!"),
                 phone="9990001111",
                 role="admin",
-                status="active",
-            ),
-            User(
-                full_name="Rita Reader",
-                email="reader@smartbook.local",
-                password_hash=hash_password("Reader123!"),
-                phone="9990002222",
-                role="user",
                 status="active",
             ),
         ]

@@ -12,8 +12,8 @@ function LoginForm() {
   const router = useRouter();
   const { login } = useAuth();
   const next = useSearchParams().get("next") || "/dashboard";
-  const [email, setEmail] = useState("reader@smartbook.local");
-  const [password, setPassword] = useState("Reader123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
   async function onSubmit(e: FormEvent) {
@@ -31,11 +31,19 @@ function LoginForm() {
     <form onSubmit={onSubmit} className="max-w-sm mx-auto p-6 space-y-3">
       <h1 className="text-xl font-semibold">Sign in</h1>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <Input value={email} onChange={(e) => setEmail(e.target.value)} />
+      <Input
+        type="email"
+        placeholder="Enter your email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        required
+      />
       <Input
         type="password"
+        placeholder="Enter your password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
+        required
       />
       <Button type="submit" className="w-full">
         Sign in
