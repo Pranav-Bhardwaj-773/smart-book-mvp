@@ -76,7 +76,7 @@ export default function HomePage() {
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.page_size ?? 12)));
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6">
+    <div className="mx-auto w-full max-w-6xl space-y-5 px-4 py-6">
       <div className="space-y-1">
         <h1 className="text-lg font-semibold tracking-tight">Catalog</h1>
         <p className="text-sm text-muted-foreground">
@@ -156,7 +156,7 @@ export default function HomePage() {
         {data?.total ?? 0} books · page {data?.page ?? 1} of {totalPages}
       </p>
 
-      <ul className="flex flex-col gap-3">
+      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {data?.items.map((b) => {
           const hasThis = dash?.current.some((r) => r.book_id === b.id);
           const atLimit = (dash?.active_count ?? 0) >= (dash?.max_allowed ?? 2);
@@ -167,10 +167,10 @@ export default function HomePage() {
           return (
             <li key={b.id}>
               <Card className="gap-0 py-0">
-                <div className="flex gap-3 p-4">
-                  <BookAvatar title={b.title} coverUrl={b.cover_url} />
+                <div className="flex gap-3 p-4 lg:flex-col">
+                  <BookAvatar title={b.title} coverUrl={b.cover_url} className="lg:size-16" />
                   <div className="min-w-0 flex-1">
-                    <h2 className="truncate font-medium leading-snug">{b.title}</h2>
+                    <h2 className="font-medium leading-snug max-lg:truncate lg:line-clamp-2">{b.title}</h2>
                     <p className="truncate text-sm text-muted-foreground">{b.authors}</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {b.category ? (
@@ -180,11 +180,11 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 border-t px-4 py-3">
+                <div className="flex items-center justify-between gap-2 border-t px-4 py-3 lg:flex-col lg:items-stretch">
                   <p className="text-xs text-muted-foreground">
                     {b.status.replaceAll("_", " ")} · {b.available_copies} available
                   </p>
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 gap-2 lg:justify-end">
                     <Button
                       size="sm"
                       variant="ghost"
