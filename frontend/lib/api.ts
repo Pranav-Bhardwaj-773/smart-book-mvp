@@ -1,11 +1,16 @@
 import { getToken } from "./auth-store";
 
-/** Same-origin proxy in dev (see next.config rewrites); override with NEXT_PUBLIC_API_URL if needed. */
-const API =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window === "undefined"
-    ? (process.env.BACKEND_URL ?? "http://127.0.0.1:8000")
-    : "/backend");
+/** Browser calls same-origin `/backend/*` (see next.config rewrites). Set BACKEND_URL on Vercel. */
+function apiBase(): string {
+  if (typeof window !== "undefined") {
+    return "/backend";
+  }
+  const direct =
+    process.env.BACKEND_URL ??
+    process.env.NEXT_PUBLIC_API_URL ??
+    "http://127.0.0.1:8000";
+  return direct.replace(/\/$/, "");
+}
 
 function token() {
   if (typeof window === "undefined") return null;
@@ -19,7 +24,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const t = token();
   if (t) headers.set("Authorization", `Bearer ${t}`);
 
-  const res = await fetch(`${API}${path}`, { ...init, headers });
+  const res = await fetch(`${apiBase()}${path}`, { ...init, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const detail = (data as { detail?: unknown }).detail;

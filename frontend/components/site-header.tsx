@@ -8,14 +8,30 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
 
 function ThemeToggle() {
+  const [mounted, setMounted] = useState(false);
   const [dark, setDark] = useState(true);
 
   useEffect(() => {
+    setMounted(true);
     const stored = localStorage.getItem("smartbook-theme");
     const next = stored ? stored === "dark" : true;
     document.documentElement.classList.toggle("dark", next);
     setDark(next);
   }, []);
+
+  if (!mounted) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-hidden
+        tabIndex={-1}
+        className="pointer-events-none opacity-0"
+      >
+        <Sun />
+      </Button>
+    );
+  }
 
   function toggle() {
     const next = !document.documentElement.classList.contains("dark");

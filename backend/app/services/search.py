@@ -451,6 +451,12 @@ def search_books(
                 else:
                     books = []
 
+            # Keyword search before vector/embedding keeps small hosts (e.g. Render) from OOMing.
+            if not books:
+                books = keyword_search(db, raw_query, criteria, extra)
+                if books:
+                    exact = True
+
             vector_filters = {}
             if language:
                 vector_filters["language"] = language

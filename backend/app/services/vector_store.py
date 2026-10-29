@@ -129,6 +129,8 @@ def _embed_gemini_single(text: str) -> List[float]:
 
 def embed_texts(texts: List[str]) -> List[List[float]]:
     """Embed a list of texts using Gemini if configured, otherwise local FastEmbed."""
+    if not settings.enable_vector_search:
+        raise RuntimeError("Vector search is disabled (ENABLE_VECTOR_SEARCH=false)")
     if is_gemini_embedding():
         return _embed_gemini_batch(texts)
     model = get_embedding_model()
@@ -147,7 +149,12 @@ def embed_single_text(text: str) -> List[float]:
 def get_qdrant_client() -> Generator[QdrantClient, None, None]:
     """Yield a QdrantClient instance and ensure it is properly closed when in local storage mode."""
     if settings.qdrant_url:
-        client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key, timeout=60.0)
+        client = QdrantClient(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+            timeout=60.0,
+            check_compatibility=False,
+        )
         try:
             yield client
         finally:
@@ -343,12 +350,16 @@ def qdrant_index_in_sync(db: Session) -> bool:
             )
             return len(points) > 0
     except Exception as e:
-        logger.warning("Could not verify Qdrant index sync: %s", e)
-        return False
+        logger.warning(
+            "Could not verify Qdrant index sync (%s); skipping startup re-index.", e
+        )
+        return True
 
 
 def upsert_single_book(book: Book) -> None:
     """Index or update a single book in Qdrant."""
+    if not settings.enable_vector_search:
+        return
     try:
         text = build_book_content(book)
         vec = embed_single_text(text)
@@ -400,6 +411,9 @@ def semantic_search(
     Returns list of tuples: (book_id, score, payload)
     """
     if not query_text or not query_text.strip():
+        return []
+
+    if not settings.enable_vector_search:
         return []
 
     try:

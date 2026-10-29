@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +27,16 @@ class Settings(BaseSettings):
     gemini_api_key: str | None = None
     # Free local FastEmbed model; its 384-dimensional vectors match the Qdrant index.
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # Loading FastEmbed + full-catalog indexing on boot needs >512Mi (typical Render free tier).
+    startup_qdrant_index: bool = False
+    enable_vector_search: bool = True
+
+    def model_post_init(self, __context: object) -> None:
+        on_render = bool(os.getenv("RENDER"))
+        if on_render and os.getenv("ENABLE_VECTOR_SEARCH") is None:
+            self.enable_vector_search = False
+        if on_render and os.getenv("STARTUP_QDRANT_INDEX") is None:
+            self.startup_qdrant_index = False
 
 
 settings = Settings()
