@@ -1,20 +1,27 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookMarked,
   Library,
   Search,
   Sparkles,
-  SlidersHorizontal,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import type { Book, BookList, Dashboard } from "@/lib/types";
 import { CatalogBookCard } from "@/components/catalog-book-card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { NativeSelect } from "@/components/ui/native-select";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { useAuth } from "@/components/auth-provider";
 
@@ -37,13 +44,17 @@ export default function HomePage() {
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const shelfRef = useRef<HTMLDivElement>(null);
+  const scrollToShelfAfterLoad = useRef(false);
 
   async function load(
     nextPage = page,
     query = q,
     nextSort = sort,
     onlyAvailable = availableOnly,
+    scrollToShelf = false,
   ) {
+    if (scrollToShelf) scrollToShelfAfterLoad.current = true;
     setError("");
     setLoading(true);
     try {
@@ -79,14 +90,20 @@ export default function HomePage() {
     load(1, q, sort, availableOnly);
   }, [user]);
 
+  useEffect(() => {
+    if (loading || !scrollToShelfAfterLoad.current) return;
+    scrollToShelfAfterLoad.current = false;
+    shelfRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [loading, data]);
+
   function onSearch(e: FormEvent) {
     e.preventDefault();
-    load(1, q, sort, availableOnly);
+    load(1, q, sort, availableOnly, true);
   }
 
   function quickSearch(term: string) {
     setQ(term);
-    load(1, term, sort, availableOnly);
+    load(1, term, sort, availableOnly, true);
   }
 
   async function rentFromCard(b: Book) {
@@ -208,7 +225,8 @@ export default function HomePage() {
       <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-10">
         <div
           id="catalog"
-          className="flex flex-col gap-4 border-b border-border/60 pb-6 sm:flex-row sm:items-end sm:justify-between"
+          ref={shelfRef}
+          className="scroll-mt-20 flex flex-col gap-4 border-b border-border/60 pb-6 sm:flex-row sm:items-end sm:justify-between"
         >
           <div>
             <h2 className="font-heading text-2xl font-semibold tracking-tight">
@@ -220,31 +238,41 @@ export default function HomePage() {
                 : `${data?.total ?? 0} books · page ${data?.page ?? 1} of ${totalPages}`}
             </p>
           </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-              <input
-                type="checkbox"
-                checked={availableOnly}
-                onChange={(e) => load(1, q, sort, e.target.checked)}
-                className="size-4 rounded border-input accent-primary"
-              />
-              Available now
-            </label>
+          <div className="relative z-30 flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <SlidersHorizontal className="size-4 text-muted-foreground" />
-              <NativeSelect
-                value={sort}
-                onChange={(e) => load(1, q, e.target.value, availableOnly)}
-                className="h-9 min-w-[140px] bg-background"
+              <Checkbox
+                id="available-only"
+                checked={availableOnly}
+                onCheckedChange={(checked) =>
+                  load(1, q, sort, checked === true)
+                }
+              />
+              <Label
+                htmlFor="available-only"
+                className="cursor-pointer font-normal text-muted-foreground"
+              >
+                Available now
+              </Label>
+            </div>
+            <Select
+              value={sort}
+              onValueChange={(value) => {
+                if (value) load(1, q, value, availableOnly);
+              }}
+            >
+              <SelectTrigger
+                className="min-w-[10.5rem] bg-background"
                 aria-label="Sort books"
               >
-                <option value="relevance">Relevance</option>
-                <option value="title_asc">Title A–Z</option>
-                <option value="year_new">Newest year</option>
-                <option value="availability">Most available</option>
-              </NativeSelect>
-            </div>
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent align="end" className="z-[200]">
+                <SelectItem value="relevance">Relevance</SelectItem>
+                <SelectItem value="title_asc">Title A–Z</SelectItem>
+                <SelectItem value="year_new">Newest year</SelectItem>
+                <SelectItem value="availability">Most available</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

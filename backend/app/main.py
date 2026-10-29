@@ -20,12 +20,25 @@ async def lifespan(_app: FastAPI):
         seed_if_empty(db)
         try:
             from app.config import settings
-            from app.services.vector_store import get_qdrant_client, index_books_from_db
-            with get_qdrant_client() as client:
-                coll_exists = client.collection_exists(settings.qdrant_collection)
-                count = client.count(settings.qdrant_collection).count if coll_exists else 0
-            if not coll_exists or count == 0:
-                index_books_from_db(db)
+            from app.services.vector_store import (
+                get_qdrant_client,
+                index_books_from_db,
+                qdrant_index_in_sync,
+            )
+
+            if not qdrant_index_in_sync(db):
+                import logging
+
+                logging.getLogger(__name__).info(
+                    "Qdrant index out of sync with database; re-indexing catalog…"
+                )
+                index_books_from_db(db, recreate=True)
+            else:
+                with get_qdrant_client() as client:
+                    coll_exists = client.collection_exists(settings.qdrant_collection)
+                    count = client.count(settings.qdrant_collection).count if coll_exists else 0
+                if not coll_exists or count == 0:
+                    index_books_from_db(db)
         except Exception as e:
             import logging
             logging.getLogger(__name__).warning(f"Could not auto-index into Qdrant: {e}")

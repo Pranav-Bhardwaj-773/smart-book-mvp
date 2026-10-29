@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BookOpen, Menu, Moon, Sun, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -38,30 +38,9 @@ function ThemeToggle() {
 
 export function SiteHeader() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, ready, logout } = useAuth();
   const [open, setOpen] = useState(false);
-  const [pathname, setPathname] = useState("");
-
-  useEffect(() => {
-    const sync = () => setPathname(window.location.pathname);
-    sync();
-    window.addEventListener("popstate", sync);
-    const push = history.pushState.bind(history);
-    const replace = history.replaceState.bind(history);
-    history.pushState = (...args: Parameters<History["pushState"]>) => {
-      push(...args);
-      sync();
-    };
-    history.replaceState = (...args: Parameters<History["replaceState"]>) => {
-      replace(...args);
-      sync();
-    };
-    return () => {
-      window.removeEventListener("popstate", sync);
-      history.pushState = push;
-      history.replaceState = replace;
-    };
-  }, []);
 
   useEffect(() => {
     setOpen(false);

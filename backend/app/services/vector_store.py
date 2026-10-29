@@ -313,7 +313,38 @@ def index_books_from_db(db: Session, recreate: bool = False) -> int:
             )
 
     logger.info(f"Successfully indexed {len(points)} books into Qdrant collection '{settings.qdrant_collection}'.")
+    from app.services.search import invalidate_search_vocabulary_cache
+
+    invalidate_search_vocabulary_cache()
     return len(points)
+
+
+def qdrant_index_in_sync(db: Session) -> bool:
+    """True when Qdrant contains the same catalog rows as the SQL database."""
+    db_count = db.query(Book).filter(Book.status != "archived").count()
+    if db_count == 0:
+        return True
+    try:
+        with get_qdrant_client() as client:
+            if not client.collection_exists(settings.qdrant_collection):
+                return False
+            q_count = client.count(settings.qdrant_collection).count
+            if q_count != db_count:
+                return False
+            sample_id = (
+                db.query(Book.id).filter(Book.status != "archived").order_by(Book.id).limit(1).scalar()
+            )
+            if sample_id is None:
+                return True
+            points = client.retrieve(
+                collection_name=settings.qdrant_collection,
+                ids=[int(sample_id)],
+                with_payload=False,
+            )
+            return len(points) > 0
+    except Exception as e:
+        logger.warning("Could not verify Qdrant index sync: %s", e)
+        return False
 
 
 def upsert_single_book(book: Book) -> None:
@@ -371,7 +402,11 @@ def semantic_search(
     if not query_text or not query_text.strip():
         return []
 
-    query_vector = embed_single_text(query_text.strip())
+    try:
+        query_vector = embed_single_text(query_text.strip())
+    except Exception as e:
+        logger.warning("Embedding failed for search query: %s", e)
+        return []
 
     filter_conditions: List[Any] = []
     must_not_conditions: List[Any] = [
@@ -423,20 +458,24 @@ def semantic_search(
             must_not=must_not_conditions if must_not_conditions else None,
         )
 
-    with get_qdrant_client() as client:
-        if not client.collection_exists(settings.qdrant_collection):
-            return []
+    try:
+        with get_qdrant_client() as client:
+            if not client.collection_exists(settings.qdrant_collection):
+                return []
 
-        res = client.query_points(
-            collection_name=settings.qdrant_collection,
-            query=query_vector,
-            query_filter=qdrant_filter,
-            limit=limit,
-            with_payload=True,
-        )
+            res = client.query_points(
+                collection_name=settings.qdrant_collection,
+                query=query_vector,
+                query_filter=qdrant_filter,
+                limit=limit,
+                with_payload=True,
+            )
 
-        results = []
-        for point in res.points:
-            book_id = point.payload.get("book_id", point.id) if point.payload else point.id
-            results.append((int(book_id), float(point.score), point.payload or {}))
-        return results
+            results = []
+            for point in res.points:
+                book_id = point.payload.get("book_id", point.id) if point.payload else point.id
+                results.append((int(book_id), float(point.score), point.payload or {}))
+            return results
+    except Exception as e:
+        logger.warning("Qdrant semantic search failed: %s", e)
+        return []
