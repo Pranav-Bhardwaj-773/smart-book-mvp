@@ -2,7 +2,6 @@ import { getToken } from "./auth-store";
 
 const DEFAULT_LOCAL = "http://127.0.0.1:8000";
 
-/** Public HTTPS API URL safe to call from the browser (Render, etc.). */
 function browserDirectApi(): string | null {
   const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
   if (!raw) return null;
@@ -12,10 +11,6 @@ function browserDirectApi(): string | null {
   return url;
 }
 
-/**
- * Browser: prefer same-origin `/backend` proxy, or NEXT_PUBLIC_API_URL if set.
- * Server: BACKEND_URL / NEXT_PUBLIC_API_URL / localhost.
- */
 function apiBase(): string {
   if (typeof window !== "undefined") {
     const direct = browserDirectApi();

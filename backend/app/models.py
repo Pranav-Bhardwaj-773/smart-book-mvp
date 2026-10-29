@@ -64,7 +64,6 @@ class Book(Base):
     cover_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     total_copies: Mapped[int] = mapped_column(Integer, default=1)
     available_copies: Mapped[int] = mapped_column(Integer, default=1)
-    # available | partially_available | unavailable | archived
     status: Mapped[str] = mapped_column(String(30), default="available", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -94,7 +93,6 @@ class Rental(Base):
     duration_days: Mapped[int] = mapped_column(Integer)
     due_at: Mapped[datetime] = mapped_column(DateTime)
     returned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # active | overdue | returned | cancelled
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

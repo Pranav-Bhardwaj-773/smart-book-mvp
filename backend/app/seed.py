@@ -114,7 +114,6 @@ def load_books_from_json(
         created_at = _parse_dt(item.get("createdDate"))
         updated_at = _parse_dt(item.get("updatedDate"))
 
-        # Primary key `id` is NOT passed, allowing SQLite to auto-increment from 1 upwards
         book = Book(
             isbn=isbn,
             title=title,
@@ -191,7 +190,6 @@ if __name__ == "__main__":
 
     session = SessionLocal()
     try:
-        # Ensure admin user and settings exist
         seed_if_empty(session, force_books=args.force)
         count = session.query(Book).count()
         print(f"Database seeded successfully. Total books in DB: {count}")

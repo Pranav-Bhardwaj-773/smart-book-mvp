@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 
-/** Static shell for prerender; replaced once SiteHeader resolves the pathname. */
 export function SiteHeaderFallback() {
   return (
     <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">

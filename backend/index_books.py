@@ -85,7 +85,6 @@ def main():
     args = parser.parse_args()
     count = run_indexing(recreate=args.recreate)
 
-    # If query specified, or run a default test query to verify functionality
     test_q = args.query if args.query else "machine learning and artificial intelligence for beginners"
     run_test_query(test_q)
 

@@ -218,7 +218,6 @@ def ensure_collection(client: QdrantClient, recreate: bool = False) -> None:
     target_dim = get_vector_dimension()
     exists = client.collection_exists(settings.qdrant_collection)
     if exists and not recreate:
-        # Check if existing collection vector dimension matches expected dimension
         try:
             coll_info = client.get_collection(settings.qdrant_collection)
             current_dim = getattr(coll_info.config.params.vectors, "size", None)
@@ -245,7 +244,6 @@ def ensure_collection(client: QdrantClient, recreate: bool = False) -> None:
             ),
         )
 
-    # Ensure payload indexes exist for filtered fields
     for field, schema_type in [
         ("status", models.PayloadSchemaType.KEYWORD),
         ("language", models.PayloadSchemaType.KEYWORD),

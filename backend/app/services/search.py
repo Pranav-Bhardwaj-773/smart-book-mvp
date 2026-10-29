@@ -11,7 +11,6 @@ from app.services.vector_store import semantic_search
 
 logger = logging.getLogger(__name__)
 
-# Generic words users type in NL queries; requiring them excludes most catalog rows.
 _KEYWORD_STOPWORDS = frozenset(
     {
         "book",
@@ -35,7 +34,6 @@ _KEYWORD_STOPWORDS = frozenset(
     }
 )
 
-# High-value catalog topics for typo correction (pykon → python).
 _TOPIC_TOKENS = frozenset(
     {
         "python",
@@ -125,7 +123,6 @@ def correct_query_spelling(db: Session, query_text: str) -> str:
             if fix != core.lower():
                 changed = True
                 prefix = word[: len(word) - len(core) - (0 if word.endswith(core) else 0)]
-                # Preserve simple punctuation wrapper
                 if word.startswith(core):
                     corrected_words.append(fix + word[len(core) :])
                 elif word.endswith(core):
@@ -254,8 +251,6 @@ def keyword_search(
     if not text:
         return []
 
-    # NL phrases like "beginner friendly" hint at audience; catalog uses labels like
-    # "general" / "intermediate", so do not hard-filter on inferred reading_level.
     filter_criteria = criteria
     if not extra.get("reading_level") and criteria.reading_level:
         filter_criteria = replace(criteria, reading_level=None)
@@ -451,7 +446,6 @@ def search_books(
                 else:
                     books = []
 
-            # Keyword search before vector/embedding keeps small hosts (e.g. Render) from OOMing.
             if not books:
                 books = keyword_search(db, raw_query, criteria, extra)
                 if books:
@@ -468,8 +462,6 @@ def search_books(
                 vector_filters["year_to"] = year_to
             if pages_max is not None:
                 vector_filters["pages_max"] = pages_max
-            # Reading level inferred from natural language should guide semantic ranking,
-            # not exclude books whose indexed metadata uses a different level label.
             if extra.get("reading_level"):
                 vector_filters["reading_level"] = reading_level
 
@@ -529,7 +521,6 @@ def search_books(
                 )
 
         else:
-            # No query string: standard catalog browsing with applied filters
             query = apply_db_filters(db.query(Book), criteria, extra)
             books = query.all()
             exact = True
@@ -545,7 +536,6 @@ def search_books(
             books = query.all()
             exact = True
 
-    # Sorting
     if sort == "title_asc":
         books.sort(key=lambda b: b.title.lower())
     elif sort == "title_desc":
@@ -557,7 +547,6 @@ def search_books(
     elif sort == "availability":
         books.sort(key=lambda b: b.available_copies, reverse=True)
     elif sort == "relevance" and criteria.scores:
-        # Default relevance sorts by semantic vector score descending
         books.sort(key=lambda b: criteria.scores.get(b.id, 0.0), reverse=True)
 
     total = len(books)
