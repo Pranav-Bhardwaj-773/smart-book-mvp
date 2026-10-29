@@ -1,14 +1,31 @@
 import { getToken } from "./auth-store";
 
-/** Browser calls same-origin `/backend/*` (see next.config rewrites). Set BACKEND_URL on Vercel. */
+const DEFAULT_LOCAL = "http://127.0.0.1:8000";
+
+/** Public HTTPS API URL safe to call from the browser (Render, etc.). */
+function browserDirectApi(): string | null {
+  const raw = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!raw) return null;
+  const url = raw.replace(/\/$/, "");
+  if (!/^https:\/\//i.test(url)) return null;
+  if (/^https:\/\/(127\.0\.0\.1|localhost)/i.test(url)) return null;
+  return url;
+}
+
+/**
+ * Browser: prefer same-origin `/backend` proxy, or NEXT_PUBLIC_API_URL if set.
+ * Server: BACKEND_URL / NEXT_PUBLIC_API_URL / localhost.
+ */
 function apiBase(): string {
   if (typeof window !== "undefined") {
+    const direct = browserDirectApi();
+    if (direct) return direct;
     return "/backend";
   }
   const direct =
     process.env.BACKEND_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
-    "http://127.0.0.1:8000";
+    DEFAULT_LOCAL;
   return direct.replace(/\/$/, "");
 }
 
@@ -71,32 +88,31 @@ export const api = {
   returnBook: (id: number) =>
     request(`/rentals/${id}/return`, { method: "POST" }),
   adminStats: () => request("/admin/stats"),
-adminUsers: (q = "") =>
-  request<import("./types").User[]>(
-    `/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`
-  ),
-adminSetStatus: (id: number, status: string) =>
-  request(`/admin/users/${id}/status`, {
-    method: "PATCH",
-    body: JSON.stringify({ status }),
-  }),
-adminBooks: () => request<import("./types").Book[]>("/admin/books"),
-adminArchive: (id: number) =>
-  request(`/admin/books/${id}/archive`, { method: "POST" }),
-adminRestore: (id: number) =>
-  request(`/admin/books/${id}/restore`, { method: "POST" }),
-adminInventory: (id: number, delta: number) =>
-  request(`/admin/books/${id}/inventory`, {
-    method: "POST",
-    body: JSON.stringify({ delta }),
-  }),
-adminRentals: (status = "") =>
-  request(
-    `/admin/rentals${status ? `?status=${encodeURIComponent(status)}` : ""}`
-  ),
-adminReturn: (id: number) =>
-  request(`/admin/rentals/${id}/return`, { method: "POST" }),
-adminAddBook: (body: object) =>
-  request("/admin/books", { method: "POST", body: JSON.stringify(body) }),
+  adminUsers: (q = "") =>
+    request<import("./types").User[]>(
+      `/admin/users${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    ),
+  adminSetStatus: (id: number, status: string) =>
+    request(`/admin/users/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
+  adminBooks: () => request<import("./types").Book[]>("/admin/books"),
+  adminArchive: (id: number) =>
+    request(`/admin/books/${id}/archive`, { method: "POST" }),
+  adminRestore: (id: number) =>
+    request(`/admin/books/${id}/restore`, { method: "POST" }),
+  adminInventory: (id: number, delta: number) =>
+    request(`/admin/books/${id}/inventory`, {
+      method: "POST",
+      body: JSON.stringify({ delta }),
+    }),
+  adminRentals: (status = "") =>
+    request(
+      `/admin/rentals${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  adminReturn: (id: number) =>
+    request(`/admin/rentals/${id}/return`, { method: "POST" }),
+  adminAddBook: (body: object) =>
+    request("/admin/books", { method: "POST", body: JSON.stringify(body) }),
 };
-
