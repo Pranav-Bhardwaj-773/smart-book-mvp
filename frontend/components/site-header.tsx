@@ -147,13 +147,13 @@ export function SiteHeader() {
 
   return (
     <>
-    <header className="sticky top-0 z-40 border-b bg-background">
-      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-3 px-4">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur-md supports-[backdrop-filter]:bg-background/70">
+      <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-3 px-4">
         <Link
           href="/"
           className="flex min-w-0 items-center gap-2 font-semibold tracking-tight"
         >
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-full border bg-card">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-linear-to-br from-card to-muted">
             <BookOpen className="size-4" />
           </span>
           <span className="truncate">Smart Book</span>
@@ -184,7 +184,7 @@ export function SiteHeader() {
           aria-label="Mobile"
           className="absolute inset-x-0 top-full z-40 max-h-[calc(100vh-3.5rem)] overflow-y-auto border-b bg-background px-3 py-3 lg:hidden"
         >
-          <div className="mx-auto flex w-full max-w-5xl flex-col gap-1">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-1">
             {links(true)}
           </div>
         </nav>
