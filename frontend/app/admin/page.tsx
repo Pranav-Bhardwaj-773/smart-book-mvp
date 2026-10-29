@@ -48,9 +48,11 @@ export default function AdminPage() {
     description: "",
     total_copies: 1,
   });
+  const [loading, setLoading] = useState(false);
 
   async function reload() {
     setMsg("");
+    setLoading(true);
     try {
       const [s, b, u, r] = await Promise.all([
         api.adminStats() as Promise<AdminStats>,
@@ -64,6 +66,8 @@ export default function AdminPage() {
       setRentals(r);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "Failed to load admin data");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -71,6 +75,7 @@ export default function AdminPage() {
     if (!ready || user?.role !== "admin") return;
     let cancelled = false;
     setMsg("");
+    setLoading(true);
     Promise.all([
       api.adminStats() as Promise<AdminStats>,
       api.adminBooks(),
@@ -87,6 +92,9 @@ export default function AdminPage() {
       .catch((e) => {
         if (cancelled) return;
         setMsg(e instanceof Error ? e.message : "Failed to load admin data");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -249,6 +257,16 @@ export default function AdminPage() {
           </form>
 
           <Card className="gap-0 overflow-hidden py-0">
+            {loading ? (
+              <div
+                className="flex flex-col items-center justify-center gap-2 py-16"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner className="size-8" />
+                <p className="text-sm text-muted-foreground">Loading books…</p>
+              </div>
+            ) : (
             <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-sm">
               <thead>
@@ -305,6 +323,7 @@ export default function AdminPage() {
               </tbody>
             </table>
             </div>
+            )}
           </Card>
         </div>
       )}

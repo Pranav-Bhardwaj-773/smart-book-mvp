@@ -71,7 +71,6 @@ function LoginForm() {
           </label>
           <Button type="submit" className="h-10 w-full" disabled={pending}>
             {pending ? <Spinner className="size-4" /> : "Sign in"}
-            Sign in
           </Button>
           <p className="text-sm text-muted-foreground">
             New here?{" "}
